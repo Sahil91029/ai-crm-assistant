@@ -73,6 +73,7 @@ export default function ChatPanel() {
       console.log("Response:", response);
 
       const data = response.data;
+      console.log("Backend Form:", data.form);
 
       console.log("Data:", data);
 

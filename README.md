@@ -214,7 +214,7 @@ npm run dev
 Frontend:
 
 ```
-http://localhost:5173
+https://ai-crm-assistant-tau.vercel.app/
 ```
 
 ---
