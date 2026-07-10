@@ -190,13 +190,13 @@ python -m uvicorn app.main:app --reload
 Backend:
 
 ```
-http://127.0.0.1:8000
+https://ai-crm-assistant-vrp7.onrender.com
 ```
 
 Swagger:
 
 ```
-http://127.0.0.1:8000/docs
+https://ai-crm-assistant-vrp7.onrender.com
 ```
 
 ---
