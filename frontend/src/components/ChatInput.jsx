@@ -1,12 +1,21 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { FaMicrophone, FaMicrophoneSlash, FaPaperPlane } from "react-icons/fa";
+import { AiOutlineLoading3Quarters } from "react-icons/ai";
 
-export default function ChatInput({ onSend }) {
-  const [text, setText] = useState("");
-  const [listening, setListening] = useState(false);
+export default function ChatInput({ onSend, loading }) {
+  const [message, setMessage] = useState("");
+
+  const [liveTranscript, setLiveTranscript] = useState("");
+
+  const [finalTranscript, setFinalTranscript] = useState("");
+
+  const [isListening, setIsListening] = useState(false);
+
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const recognitionRef = useRef(null);
 
-  const startListening = () => {
+  useEffect(() => {
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -17,159 +26,233 @@ export default function ChatInput({ onSend }) {
 
     const recognition = new SpeechRecognition();
 
-    recognition.lang = "en-US";
-    recognition.continuous = true;
+    // Better for Indian English
+    recognition.lang = "en-IN";
+
+    recognition.continuous = false;
+
     recognition.interimResults = true;
 
+    recognition.maxAlternatives = 1;
+
     recognition.onstart = () => {
-      setListening(true);
+      setIsListening(true);
+      setIsProcessing(false);
+      setLiveTranscript("");
+      setFinalTranscript("");
+    };
+
+    recognition.onaudiostart = () => {
+      console.log("🎤 Audio started");
+    };
+
+    recognition.onaudioend = () => {
+      console.log("🔇 Audio ended");
     };
 
     recognition.onresult = (event) => {
-      let transcript = "";
+      let interim = "";
+      let completed = "";
 
-      for (let i = 0; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript + " ";
+      for (
+        let i = event.resultIndex;
+        i < event.results.length;
+        i++
+      ) {
+        const transcript = event.results[i][0].transcript;
+
+        if (event.results[i].isFinal) {
+          completed += transcript + " ";
+        } else {
+          interim += transcript;
+        }
       }
 
-      setText(transcript.trim());
+      setLiveTranscript(interim);
+
+      if (completed.trim()) {
+        setFinalTranscript((prev) =>
+          (prev + " " + completed).trim()
+        );
+      }
     };
 
-    recognition.onerror = () => {
-      setListening(false);
+    recognition.onspeechend = () => {
+      setIsProcessing(true);
+      recognition.stop();
+    };
+
+    recognition.onnomatch = () => {
+      console.log("Speech not recognized.");
+    };
+
+    recognition.onerror = (event) => {
+      console.log(event.error);
+
+      setIsListening(false);
+      setIsProcessing(false);
+
+      if (event.error === "no-speech") {
+        alert("No speech detected.");
+      }
+
+      if (event.error === "not-allowed") {
+        alert("Please allow microphone access.");
+      }
     };
 
     recognition.onend = () => {
-      setListening(false);
+      setIsListening(false);
+      setIsProcessing(false);
+
+      if (finalTranscript.trim()) {
+        setMessage(finalTranscript.trim());
+      }
+
+      setLiveTranscript("");
     };
 
-    recognition.start();
-
     recognitionRef.current = recognition;
+  }, []);
+
+  const startListening = () => {
+    if (!recognitionRef.current) return;
+
+    setLiveTranscript("");
+    setFinalTranscript("");
+
+    recognitionRef.current.start();
   };
 
   const stopListening = () => {
-    recognitionRef.current?.stop();
+    if (!recognitionRef.current) return;
 
-    if (text.trim()) {
-      onSend(text);
-      setText("");
-    }
+    setIsProcessing(true);
+
+    recognitionRef.current.stop();
   };
 
-  const handleSend = () => {
-    if (!text.trim()) return;
+  const handleSubmit = (e) => {
+    e.preventDefault();
 
-    onSend(text);
-    setText("");
+    if (!message.trim()) return;
+
+    onSend(message.trim());
+
+    setMessage("");
+    setLiveTranscript("");
+    setFinalTranscript("");
   };
-
-  return (
-    <div className="space-y-4">
-
+    return (
+    <form
+      onSubmit={handleSubmit}
+      className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4"
+    >
       {/* Voice Status */}
 
-      <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 border">
+      {(isListening || isProcessing) && (
+        <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-3 dark:border-blue-700 dark:bg-blue-900/20">
+          <div className="flex items-center gap-2 mb-2">
+            <span
+              className={`h-3 w-3 rounded-full ${
+                isListening
+                  ? "bg-red-500 animate-pulse"
+                  : "bg-blue-500 animate-pulse"
+              }`}
+            />
 
-        <div className="flex items-center gap-3">
-
-          <div className="text-3xl">
-            🤖
-          </div>
-
-          <div>
-
-            <h3 className="font-bold text-lg">
-              AI Voice Assistant
-            </h3>
-
-            <p className="text-sm text-gray-600">
-              Speak naturally or type your interaction.
+            <p className="font-semibold text-sm text-blue-700 dark:text-blue-300">
+              {isListening
+                ? "Listening..."
+                : "Processing speech..."}
             </p>
-
           </div>
 
+          {liveTranscript && (
+            <p className="text-gray-700 dark:text-gray-300 text-sm italic">
+              {liveTranscript}
+            </p>
+          )}
         </div>
-
-      </div>
-
-      {/* Recording */}
-
-      {listening && (
-
-        <div className="bg-red-50 border border-red-300 rounded-xl p-4">
-
-          <div className="flex items-center gap-2 mb-3">
-
-            <span className="w-3 h-3 rounded-full bg-red-600 animate-pulse"></span>
-
-            <span className="font-semibold text-red-600">
-              Listening...
-            </span>
-
-          </div>
-
-          <div className="bg-white rounded-lg p-3 min-h-[70px] text-gray-700">
-
-            {text || "Speak now..."}
-
-          </div>
-
-        </div>
-
       )}
 
-      {/* Input */}
+      {/* Text Area */}
 
       <textarea
         rows={4}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="Describe your interaction..."
-        className="w-full border rounded-xl p-4 resize-none focus:ring-2 focus:ring-blue-500 outline-none"
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        placeholder="Describe your interaction with the healthcare professional..."
+        className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 resize-none outline-none focus:ring-2 focus:ring-blue-500"
       />
 
-      {/* Buttons */}
+      {/* Bottom Controls */}
 
-      <div className="flex justify-between">
+      <div className="mt-4 flex items-center justify-between">
 
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
 
-          <button
-            onClick={startListening}
-            disabled={listening}
-            className={`px-5 py-3 rounded-xl text-white font-semibold transition ${
-              listening
-                ? "bg-gray-400 cursor-not-allowed"
-                : "bg-green-600 hover:bg-green-700"
-            }`}
-          >
-            🎤 Start Recording
-          </button>
+          {!isListening ? (
+            <button
+              type="button"
+              onClick={startListening}
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500 text-white transition hover:bg-red-600"
+            >
+              <FaMicrophone size={18} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={stopListening}
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-red-700 text-white animate-pulse"
+            >
+              <FaMicrophoneSlash size={18} />
+            </button>
+          )}
 
-          <button
-            onClick={stopListening}
-            disabled={!listening}
-            className={`px-5 py-3 rounded-xl text-white font-semibold transition ${
-              listening
-                ? "bg-red-600 hover:bg-red-700"
-                : "bg-gray-400 cursor-not-allowed"
-            }`}
-          >
-            ⏹ Stop Recording
-          </button>
+          <div className="text-sm text-gray-500">
+            {isListening
+              ? "Speak naturally..."
+              : isProcessing
+              ? "Finalizing transcript..."
+              : "Ready"}
+          </div>
 
         </div>
 
         <button
-          onClick={handleSend}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-semibold transition"
+          type="submit"
+          disabled={loading || !message.trim()}
+          className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          🚀 Send
+          {loading ? (
+            <>
+              <AiOutlineLoading3Quarters className="animate-spin" />
+              Sending...
+            </>
+          ) : (
+            <>
+              <FaPaperPlane />
+              Send
+            </>
+          )}
         </button>
 
       </div>
 
-    </div>
+      {/* Footer */}
+
+      <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+        <span>
+          {isListening
+            ? "🎤 Listening"
+            : isProcessing
+            ? "⏳ Processing"
+            : "✅ Ready"}
+        </span>
+
+        <span>{message.length} characters</span>
+      </div>
+    </form>
   );
 }

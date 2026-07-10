@@ -12,6 +12,8 @@ export default function ChatPanel() {
 
   const bottomRef = useRef(null);
 
+  const [loading, setLoading] = useState(false);
+
   const [messages, setMessages] = useState([
     {
       role: "assistant",
@@ -20,16 +22,18 @@ export default function ChatPanel() {
     },
   ]);
 
-  const [loading, setLoading] = useState(false);
-
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
       behavior: "smooth",
     });
   }, [messages, loading]);
 
+  // ----------------------------
+  // Text To Speech
+  // ----------------------------
+
   const speak = (text) => {
-    if (!window.speechSynthesis) return;
+    if (!window.speechSynthesis || !text) return;
 
     window.speechSynthesis.cancel();
 
@@ -41,54 +45,90 @@ export default function ChatPanel() {
     window.speechSynthesis.speak(utterance);
   };
 
+  // ----------------------------
+  // Send Message
+  // ----------------------------
+
   const handleSend = async (text) => {
     if (!text.trim()) return;
 
-    const userMessage = {
-      role: "user",
-      text,
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
+    // Add user message
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        text,
+      },
+    ]);
 
     setLoading(true);
 
     try {
-      const { data } = await api.post("/chat", {
+      console.log("Sending:", text);
+
+      const response = await api.post("/chat", {
         message: text,
       });
 
-      console.log("Backend Response:", data);
+      console.log("Response:", response);
 
+      const data = response.data;
+
+      console.log("Data:", data);
+
+      // Update CRM Form
       if (data.form) {
         dispatch(updateMultipleFields(data.form));
       }
 
-      const aiMessage = {
-        role: "assistant",
-        text: data.reply,
-      };
-
-      setMessages((prev) => [...prev, aiMessage]);
-
-      speak(data.reply);
-    } catch (error) {
-      console.error(error);
-
+      // AI Reply
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
           text:
-            "❌ Unable to connect to the backend. Please check if FastAPI is running.",
+            data.reply ||
+            "Interaction logged successfully.",
         },
       ]);
+
+      speak(data.reply);
+
+    } catch (error) {
+
+      console.error("Axios Error:", error);
+
+      let message = "Unable to connect to backend.";
+
+      if (error.response) {
+
+        console.log(error.response);
+
+        message =
+          error.response.data?.detail ||
+          JSON.stringify(error.response.data);
+
+      } else if (error.message) {
+
+        message = error.message;
+
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text: "❌ " + message,
+        },
+      ]);
+
     } finally {
+
       setLoading(false);
+
     }
   };
-
-  return (
+    return (
     <div className="bg-white rounded-2xl shadow-lg h-[82vh] flex flex-col">
 
       {/* Header */}
@@ -104,13 +144,13 @@ export default function ChatPanel() {
 
       </div>
 
-      {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-gray-50">
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto bg-gray-50 p-5 space-y-4">
 
-        {messages.map((msg, index) => (
+        {messages.map((message, index) => (
           <ChatMessage
             key={index}
-            message={msg}
+            message={message}
           />
         ))}
 
@@ -126,7 +166,7 @@ export default function ChatPanel() {
                 </span>
 
                 <span className="text-gray-600">
-                  AI is analyzing your interaction...
+                  AI is analysing your interaction...
                 </span>
 
               </div>
@@ -141,8 +181,14 @@ export default function ChatPanel() {
       </div>
 
       {/* Chat Input */}
+
       <div className="border-t p-5">
-        <ChatInput onSend={handleSend} />
+
+        <ChatInput
+          onSend={handleSend}
+          loading={loading}
+        />
+
       </div>
 
     </div>

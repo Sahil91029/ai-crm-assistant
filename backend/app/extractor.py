@@ -1,9 +1,9 @@
 import re
 from datetime import datetime
 
-# ---------------------------------------
-# Word to Number
-# ---------------------------------------
+# ==========================================================
+# WORD TO NUMBER
+# ==========================================================
 
 WORD_NUMBERS = {
     "zero": "0",
@@ -17,7 +17,21 @@ WORD_NUMBERS = {
     "eight": "8",
     "nine": "9",
     "ten": "10",
+    "eleven": "11",
+    "twelve": "12",
+    "thirteen": "13",
+    "fourteen": "14",
+    "fifteen": "15",
+    "sixteen": "16",
+    "seventeen": "17",
+    "eighteen": "18",
+    "nineteen": "19",
+    "twenty": "20",
 }
+
+# ==========================================================
+# MONTHS
+# ==========================================================
 
 MONTHS = {
     "january": "01",
@@ -34,93 +48,122 @@ MONTHS = {
     "december": "12",
 }
 
+# ==========================================================
+# MATERIALS
+# ==========================================================
+
 MATERIALS = [
     "brochure",
     "leaflet",
     "catalog",
-    "flyer",
-    "presentation",
     "pamphlet",
+    "presentation",
+    "flyer",
+    "visual aid",
+    "sample kit",
 ]
+
+# ==========================================================
+# POSITIVE
+# ==========================================================
 
 POSITIVE = [
     "interested",
-    "happy",
     "positive",
+    "happy",
     "good",
     "excellent",
     "agreed",
     "liked",
+    "satisfied",
+    "accepted",
 ]
 
 NEGATIVE = [
     "negative",
-    "rejected",
     "declined",
+    "rejected",
     "not interested",
+    "angry",
+    "poor",
 ]
 
-# ---------------------------------------
-# Normalize speech text
-# ---------------------------------------
+# ==========================================================
+# NORMALIZE SPEECH
+# ==========================================================
 
 def normalize(text):
 
     text = text.lower()
 
-    text = text.replace("a.m.", "AM")
-    text = text.replace("p.m.", "PM")
-    text = text.replace("am", "AM")
-    text = text.replace("pm", "PM")
+    text = text.replace("doctor", "dr")
+
+    text = text.replace("dr.", "dr")
+
+    text = text.replace("a.m.", " am ")
+
+    text = text.replace("p.m.", " pm ")
 
     text = re.sub(r"(\d+)(st|nd|rd|th)", r"\1", text)
 
     for word, number in WORD_NUMBERS.items():
         text = re.sub(rf"\b{word}\b", number, text)
 
-    return text
+    text = re.sub(r"\s+", " ", text)
 
+    return text.strip()
 
-# ---------------------------------------
-# Parse Date
-# ---------------------------------------
+# ==========================================================
+# DATE
+# ==========================================================
 
 def extract_date(text):
 
     text = normalize(text)
 
+    # 13 July 2026
+
     match = re.search(
-        r"(\d{1,2})\s+([a-zA-Z]+)\s+(\d{4})",
+        r"(\d{1,2})\s+([a-z]+)\s+(\d{4})",
         text,
     )
 
-    if not match:
-        return ""
+    if match:
 
-    day = match.group(1).zfill(2)
+        day = match.group(1).zfill(2)
 
-    month = MONTHS.get(match.group(2).lower())
+        month = MONTHS.get(match.group(2))
 
-    year = match.group(3)
+        year = match.group(3)
 
-    if not month:
-        return ""
+        if month:
+            return f"{year}-{month}-{day}"
 
-    return f"{year}-{month}-{day}"
+    # 2026-07-13
 
+    match = re.search(
+        r"(\d{4})-(\d{2})-(\d{2})",
+        text,
+    )
 
-# ---------------------------------------
-# Parse Time
-# ---------------------------------------
+    if match:
+        return match.group()
+
+    return ""
+
+# ==========================================================
+# TIME
+# ==========================================================
 
 def extract_time(text):
 
     text = normalize(text)
 
+    # 3:30 PM
+
     match = re.search(
-        r"(\d{1,2}):(\d{2})\s*(AM|PM)",
+        r"(\d{1,2}):(\d{2})\s*(am|pm)",
         text,
-        re.I,
     )
 
     if match:
@@ -130,10 +173,11 @@ def extract_time(text):
             "%I:%M %p",
         ).strftime("%H:%M")
 
+    # 3 PM
+
     match = re.search(
-        r"(\d{1,2})\s*(AM|PM)",
+        r"(\d{1,2})\s*(am|pm)",
         text,
-        re.I,
     )
 
     if match:
@@ -143,12 +187,153 @@ def extract_time(text):
             "%I %p",
         ).strftime("%H:%M")
 
+    # 15:30
+
+    match = re.search(
+        r"\b([01]?\d|2[0-3]):([0-5]\d)\b",
+        text,
+    )
+
+    if match:
+        return match.group()
+
+    return ""
+
+# ==========================================================
+# HCP NAME
+# ==========================================================
+
+def extract_hcp(text):
+    text = normalize(text)
+
+    match = re.search(
+        r"\bdr\s+(.+?)(?=\s+(?:on|at|with|about|regarding|discussed|shared|gave|met|visited|called|email|phone|today|yesterday|tomorrow|next)\b|$)",
+        text,
+        re.IGNORECASE,
+    )
+
+    if not match:
+        return ""
+
+    name = " ".join(word.capitalize() for word in match.group(1).split())
+
+    return f"Dr {name}"
+
+
+# ==========================================================
+# MATERIALS
+# ==========================================================
+
+def extract_material(text):
+
+    text = normalize(text)
+
+    for material in MATERIALS:
+        if material in text:
+            return material.title()
+
     return ""
 
 
-# ---------------------------------------
-# Main Extractor
-# ---------------------------------------
+# ==========================================================
+# SAMPLES
+# ==========================================================
+
+def extract_samples(text):
+
+    text = normalize(text)
+
+    match = re.search(
+        r"(\d+)\s+samples?",
+        text,
+    )
+
+    if match:
+        return match.group(1)
+
+    return ""
+
+
+# ==========================================================
+# TOPICS / MEDICINES
+# ==========================================================
+
+def extract_topics(text):
+
+    text = normalize(text)
+
+    patterns = [
+        r"(?:discussed|discuss|about)\s+(.+?)(?:\.|,| and | i | we |$)",
+        r"(?:explained|presented)\s+(.+?)(?:\.|,| and | i | we |$)",
+        r"(?:regarding)\s+(.+?)(?:\.|,| and | i | we |$)",
+    ]
+
+    for pattern in patterns:
+
+        match = re.search(pattern, text, re.IGNORECASE)
+
+        if match:
+            return match.group(1).title().strip()
+
+    return ""
+
+
+# ==========================================================
+# SENTIMENT
+# ==========================================================
+
+def extract_sentiment(text):
+
+    text = normalize(text)
+
+    for word in NEGATIVE:
+        if word in text:
+            return (
+                "Negative",
+                "Doctor was not interested."
+            )
+
+    for word in POSITIVE:
+        if word in text:
+            return (
+                "Positive",
+                "Doctor showed positive interest."
+            )
+
+    return (
+        "Neutral",
+        ""
+    )
+
+
+# ==========================================================
+# FOLLOW UP
+# ==========================================================
+
+def extract_followup(text):
+
+    text = normalize(text)
+
+    if "tomorrow" in text:
+        return "Follow up tomorrow."
+
+    if "next week" in text:
+        return "Follow up next week."
+
+    if "next month" in text:
+        return "Follow up next month."
+
+    if "follow up" in text:
+        return "Schedule follow-up."
+
+    if "follow-up" in text:
+        return "Schedule follow-up."
+
+    return ""
+
+# ==========================================================
+# MAIN EXTRACTOR
+# ==========================================================
 
 def extract_information(message):
 
@@ -168,82 +353,72 @@ def extract_information(message):
         "followUp": "",
     }
 
-    # Doctor
+    # --------------------------------------------------
+    # HCP Name
+    # --------------------------------------------------
 
-    doctor = re.search(
-        r"dr\.?\s+[a-z]+",
-        text,
-        re.I,
-    )
+    form["hcpName"] = extract_hcp(message)
 
-    if doctor:
-        form["hcpName"] = doctor.group().title()
+    # --------------------------------------------------
+    # Interaction Type
+    # --------------------------------------------------
 
-    # Interaction
-
-    if "call" in text:
+    if any(word in text for word in ["call", "called", "phone"]):
         form["interactionType"] = "Call"
 
-    elif "email" in text:
+    elif any(word in text for word in ["email", "mail", "emailed"]):
         form["interactionType"] = "Email"
 
     else:
         form["interactionType"] = "Meeting"
 
-    # Date
+    # --------------------------------------------------
+    # Date & Time
+    # --------------------------------------------------
 
     form["date"] = extract_date(message)
-
-    # Time
-
     form["time"] = extract_time(message)
 
+    # --------------------------------------------------
+    # Topics
+    # --------------------------------------------------
+
+    form["topics"] = extract_topics(message)
+
+    # --------------------------------------------------
     # Materials
+    # --------------------------------------------------
 
-    for material in MATERIALS:
+    form["materials"] = extract_material(message)
 
-        if material in text:
-            form["materials"] = material.title()
-
+    # --------------------------------------------------
     # Samples
+    # --------------------------------------------------
 
-    sample = re.search(
-        r"(\d+)\s+samples?",
-        text,
-    )
+    form["samples"] = extract_samples(message)
 
-    if sample:
-        form["samples"] = sample.group(1)
+    # --------------------------------------------------
+    # Sentiment & Outcome
+    # --------------------------------------------------
 
-    # Medicine names
-    #
-    # Extract words after discussed/discuss/discussed about
+    sentiment, outcome = extract_sentiment(message)
 
-    topic = re.search(
-        r"(?:discuss|discussed|about)\s+(.+?)(?:\.|,|and i|i shared|i gave|he was|$)",
-        text,
-    )
+    form["sentiment"] = sentiment
+    form["outcome"] = outcome
 
-    if topic:
-        form["topics"] = topic.group(1).title()
+    # --------------------------------------------------
+    # Follow Up
+    # --------------------------------------------------
 
-    # Sentiment
+    form["followUp"] = extract_followup(message)
 
-    if any(word in text for word in POSITIVE):
+    # --------------------------------------------------
+    # Default Outcome
+    # --------------------------------------------------
 
-        form["sentiment"] = "Positive"
-
-        form["outcome"] = "Doctor showed positive interest."
-
-    elif any(word in text for word in NEGATIVE):
-
-        form["sentiment"] = "Negative"
-
-        form["outcome"] = "Doctor was not interested."
-
-    # Follow-up
-
-    if "follow" in text or "next week" in text:
-        form["followUp"] = "Schedule follow-up meeting."
+    if not form["outcome"]:
+        form["outcome"] = (
+            f"{form['interactionType']} logged successfully."
+        )
 
     return form
